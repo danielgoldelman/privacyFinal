@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+var cost int
+
 func main() {
 	arguments := os.Args
 	if len(arguments) == 1 {
@@ -27,7 +29,12 @@ func main() {
 		cl: []net.Conn{},
 	}
 
-	// for each new user (connection)
+	var sUConn net.Conn
+	var sUUser string
+
+	var itemlist []string
+
+	// Accept superuser, deny client
 	for {
 		c, err := l.Accept()
 
@@ -44,9 +51,55 @@ func main() {
 		}
 
 		temp := strings.TrimSpace(string(netData))
-		fmt.Println("New User: ", temp)
 
-		go uA.handleConnection(c, temp)
+		if strings.HasPrefix(temp, "SUPERUSER:") {
+			sUConn = c
+			fmt.Println(temp)
+			splitSuperuserData := strings.Split(temp, ":")
+			userName := splitSuperuserData[1]
+			sUUser = userName
+			_ = splitSuperuserData[2]
+			thingDescPrice := strings.Split(splitSuperuserData[3], "~")
+			itemlist = thingDescPrice
+
+			message := "SUPERUSER  " + userName + ":"
+
+			fmt.Println(message)
+			fmt.Println(thingDescPrice)
+
+			uA.addCtoCL(c, userName)
+			break
+		} else {
+			fmt.Fprintf(c, "Please wait for the auction to begin!")
+			c.Close()
+		}
+	}
+
+	go uA.handleSuperuserConnection(sUConn, sUUser)
+
+	// for each new user (Clients)
+	for {
+		c, err := l.Accept()
+
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		// reads in first connection (will be username of the new connection)
+		netData, err := bufio.NewReader(c).ReadString('\n')
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		temp := strings.TrimSpace(string(netData))
+		clientUnameDenom := strings.Split(temp, ":")
+		clientUname := clientUnameDenom[1]
+		_ = clientUnameDenom[2]
+		fmt.Println("New Client: ", temp)
+
+		go uA.handleClient(c, clientUname, itemlist)
 		uA.addCtoCL(c, temp)
 	}
 }
@@ -55,14 +108,8 @@ type UserArr struct {
 	cl []net.Conn
 }
 
-// Generates new read, handles disconnection, sends the message to all other connections
-func (uA *UserArr) handleConnection(c net.Conn, userName string) {
-	if len(uA.cl) == 1 {
-		fmt.Fprintln(c, "You are the first user")
-	} else {
-		fmt.Fprintln(c, uA.others()+" other users already connected")
-	}
-
+// Generates new read, handles disconnection
+func (uA *UserArr) handleSuperuserConnection(c net.Conn, userName string) {
 	for {
 		netData, err := bufio.NewReader(c).ReadString('\n')
 		if err != nil {
@@ -88,8 +135,33 @@ func (uA *UserArr) handleConnection(c net.Conn, userName string) {
 	c.Close()
 }
 
-func (uA *UserArr) others() string {
-	return fmt.Sprint(len(uA.cl) - 1)
+// Generates new read, handles disconnection, sends the message to all other connections
+func (uA *UserArr) handleClient(c net.Conn, userName string, itemList []string) {
+	fmt.Fprintln(c, "Welcome! List of items:", itemList)
+
+	for {
+		netData, err := bufio.NewReader(c).ReadString('\n')
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		temp := strings.TrimSpace(string(netData))
+		if temp == "STOP" {
+			discMess := "__User " + userName + " disconnected__"
+			fmt.Println(discMess)
+			uA.sendAllElse(c, discMess)
+			uA.deleteUser(c)
+			break
+		}
+
+		message := "User " + userName + ": " + temp
+
+		fmt.Println(message)
+		uA.sendAllElse(c, message)
+
+	}
+	c.Close()
 }
 
 // given the UserArr, a connection, and a message, sends the message to all connections != c
