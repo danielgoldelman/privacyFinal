@@ -16,6 +16,7 @@ func main() {
 		return
 	}
 
+	// requires a ip:port
 	CONNECT := arguments[1]
 	c, err := net.Dial("tcp", CONNECT)
 	if err != nil {
@@ -23,6 +24,7 @@ func main() {
 		return
 	}
 
+	// new array to hold auctioneer name, auctioneer denomination
 	arr := make([]string, 0)
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
@@ -58,6 +60,8 @@ func main() {
 		scanner.Scan()
 		// Holds the string that scanned
 		text := scanner.Text()
+
+		// ensures the auctioneer used an integer
 		if len(text) != 0 {
 			if n, e := strconv.Atoi(text); e == nil {
 				numThings = n
@@ -101,6 +105,8 @@ func main() {
 			scanner.Scan()
 			// Holds the string that scanned
 			text := scanner.Text()
+
+			// ensures the auctioneer used an integer
 			if len(text) != 0 {
 				if n, e := strconv.Atoi(text); e == nil {
 					numThings = n
@@ -111,14 +117,18 @@ func main() {
 			fmt.Println("Try Again!")
 		}
 
+		// takes item, description, price, and makes it a string broken up by the @ symbol
 		formatIndiv := strings.Join(arrIndiv, "@")
 
+		// appends the above string to the list of things being auctioned
 		arrT = append(arrT, formatIndiv)
 
 		fmt.Print("\n\n\n")
 	}
 
-	fmt.Fprint(c, "SUPERUSER:"+arr[0]+":"+arr[1]+":"+strings.Join(arrT, "~")+"\n")
+	formatarrT := strings.Join(arrT, "~")
+
+	fmt.Fprint(c, "AUCTIONEER:"+arr[0]+":"+arr[1]+":"+formatarrT+"\n")
 
 	// reads from server, prints server send
 	for {

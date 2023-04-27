@@ -90,11 +90,13 @@ func runClient(c net.Conn) {
 			// Holds the string that scanned
 			text := scanner.Text()
 
+			// Client wants to exit the auction
 			if strings.TrimSpace(string(text)) == "STOP" {
 				fmt.Println("TCP client exiting...")
 				os.Exit(0)
 			}
 
+			// ensures the auctioneer used an integer
 			if len(text) != 0 {
 				if n, e := strconv.Atoi(text); e == nil {
 					num = n
@@ -103,6 +105,8 @@ func runClient(c net.Conn) {
 			}
 			fmt.Println("Try Again!")
 		}
+
+		// only sends to server if the client input a number
 		fmt.Fprintln(c, fmt.Sprint(num))
 	}
 }

@@ -17,24 +17,29 @@ func main() {
 		return
 	}
 
+	// Listens on the port specified by the server user
 	PORT := ":" + arguments[1]
 	l, err := net.Listen("tcp4", PORT)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
+	// Closes the port completely after all connections close
 	defer l.Close()
 
+	// Array of all users' net connections
 	uA := UserArr{
 		cl: []net.Conn{},
 	}
 
+	// auctioneer net connections
 	var sUConn net.Conn
+	// auctioneer username
 	var sUUser string
-
+	// All items going on bid
 	var itemlist []string
 
-	// Accept superuser, deny client
+	// Accept auctioneer, deny client
 	for {
 		c, err := l.Accept()
 
@@ -43,7 +48,7 @@ func main() {
 			return
 		}
 
-		// reads in first connection (will be username of the new connection)
+		// reads in first connection
 		netData, err := bufio.NewReader(c).ReadString('\n')
 		if err != nil {
 			fmt.Println(err)
@@ -52,30 +57,43 @@ func main() {
 
 		temp := strings.TrimSpace(string(netData))
 
-		if strings.HasPrefix(temp, "SUPERUSER:") {
+		if strings.HasPrefix(temp, "AUCTIONEER:") {
+			// if the connection is the auctioneer
+
+			// assign auctioneer's connection
 			sUConn = c
 			fmt.Println(temp)
-			splitSuperuserData := strings.Split(temp, ":")
-			userName := splitSuperuserData[1]
+
+			// splits auctioneer's info
+			splitAuctioneerData := strings.Split(temp, ":")
+			// gets auctioneer's username
+			userName := splitAuctioneerData[1]
 			sUUser = userName
-			_ = splitSuperuserData[2]
-			thingDescPrice := strings.Split(splitSuperuserData[3], "~")
+
+			// gets auctioneer's denomination
+			_ = splitAuctioneerData[2]
+
+			// gets the thing, description, price list
+			thingDescPrice := strings.Split(splitAuctioneerData[3], "~")
 			itemlist = thingDescPrice
 
-			message := "SUPERUSER  " + userName + ":"
+			message := "AUCTIONEER  " + userName + ":"
 
 			fmt.Println(message)
 			fmt.Println(thingDescPrice)
 
+			// adds auctioneer to connection list
 			uA.addCtoCL(c, userName)
 			break
 		} else {
+			// first connection was not the auctioneer
 			fmt.Fprintf(c, "Please wait for the auction to begin!")
 			c.Close()
 		}
 	}
 
-	go uA.handleSuperuserConnection(sUConn, sUUser)
+	// after auctioneer connects, run all following messages from the auctioneer on a new thread
+	go uA.handleAuctioneerConnection(sUConn, sUUser)
 
 	// for each new user (Clients)
 	for {
@@ -86,7 +104,7 @@ func main() {
 			return
 		}
 
-		// reads in first connection (will be username of the new connection)
+		// reads in first connection (will be username and denomination of the new connection)
 		netData, err := bufio.NewReader(c).ReadString('\n')
 		if err != nil {
 			fmt.Println(err)
@@ -95,12 +113,19 @@ func main() {
 
 		temp := strings.TrimSpace(string(netData))
 		clientUnameDenom := strings.Split(temp, ":")
+
+		// get client username
 		clientUname := clientUnameDenom[1]
+
+		// get client denomination
 		_ = clientUnameDenom[2]
 		fmt.Println("New Client: ", temp)
 
+		// set up client in new thread
 		go uA.handleClient(c, clientUname, itemlist)
-		uA.addCtoCL(c, temp)
+
+		// add client to client list
+		uA.addCtoCL(c, clientUname)
 	}
 }
 
@@ -109,7 +134,7 @@ type UserArr struct {
 }
 
 // Generates new read, handles disconnection
-func (uA *UserArr) handleSuperuserConnection(c net.Conn, userName string) {
+func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 	for {
 		netData, err := bufio.NewReader(c).ReadString('\n')
 		if err != nil {
@@ -140,6 +165,7 @@ func (uA *UserArr) handleClient(c net.Conn, userName string, itemList []string) 
 	fmt.Fprintln(c, "Welcome! List of items:", itemList)
 
 	for {
+		// on new message from this client
 		netData, err := bufio.NewReader(c).ReadString('\n')
 		if err != nil {
 			fmt.Println(err)
@@ -147,10 +173,16 @@ func (uA *UserArr) handleClient(c net.Conn, userName string, itemList []string) 
 		}
 
 		temp := strings.TrimSpace(string(netData))
+
+		// if the client disconnects
 		if temp == "STOP" {
 			discMess := "__User " + userName + " disconnected__"
 			fmt.Println(discMess)
+
+			// inform all other clients that this client has left
 			uA.sendAllElse(c, discMess)
+
+			// delete the user from the client list
 			uA.deleteUser(c)
 			break
 		}
@@ -158,6 +190,8 @@ func (uA *UserArr) handleClient(c net.Conn, userName string, itemList []string) 
 		message := "User " + userName + ": " + temp
 
 		fmt.Println(message)
+
+		// inform all other clients of this client's new bid
 		uA.sendAllElse(c, message)
 
 	}
