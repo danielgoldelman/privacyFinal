@@ -1,4 +1,4 @@
-package auctioneer
+package main
 
 import (
 	"bufio"
