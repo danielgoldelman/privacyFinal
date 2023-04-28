@@ -30,13 +30,11 @@ A few notes:
 
 - Denomination does not matter yet
 - Auctioneer has to join before a client can, otherwise it will reject the connection
+
 - Number of things still has some bugs...
+
 - Validation of user input has to happen
     - we dont want usernames to include ":" or "@"
-    - prices input and submitted by clients should be larger than the current bid cap (and larger than the starting price set by the auctioneer)
-- Stop there from being two auctioneers
 - Stop there from being two users of the same username
-- set up auction for multiple items
-- let auctioneer input affect the standing of the auction (auction for an item closes)
 - keep record of who won what auction and their username (later email address as well???)
-- on auction close, every connection is severed
+- check # of inputs to make correct

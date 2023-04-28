@@ -54,16 +54,6 @@ func main() {
 
 	fmt.Fprintln(c, "Username:"+uName+":"+uDenom)
 
-	for {
-		message, _ := bufio.NewReader(c).ReadString('\n')
-		fmt.Print(message)
-		if strings.TrimSpace(string(message)) == "Please wait for the auction to begin!" {
-			os.Exit(0)
-		} else {
-			break
-		}
-	}
-
 	// starts separate thread for this for loop
 
 	// takes in user input, sends to server
@@ -72,10 +62,16 @@ func main() {
 	// reads from server, prints server send
 	for {
 		message, _ := bufio.NewReader(c).ReadString('\n')
-		if strings.TrimSpace(string(message)) == "Please wait for the auction to begin!" {
+		messTrimmed := strings.TrimSpace(string(message))
+		if messTrimmed == "Please wait for the auction to begin!" {
+			c.Close()
+			os.Exit(0)
+		} else if messTrimmed == "Auction Terminated" {
+			fmt.Println(messTrimmed)
+			c.Close()
 			os.Exit(0)
 		}
-		fmt.Print(message)
+		fmt.Println(messTrimmed)
 	}
 }
 
@@ -84,7 +80,6 @@ func runClient(c net.Conn) {
 		var num int
 		scanner := bufio.NewScanner(os.Stdin)
 		for {
-			fmt.Print("\n")
 			// Scans a line from Stdin(Console)
 			scanner.Scan()
 			// Holds the string that scanned
@@ -96,7 +91,7 @@ func runClient(c net.Conn) {
 				os.Exit(0)
 			}
 
-			// ensures the auctioneer used an integer
+			// ensures the client used an integer
 			if len(text) != 0 {
 				if n, e := strconv.Atoi(text); e == nil {
 					num = n

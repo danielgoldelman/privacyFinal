@@ -5,10 +5,18 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 )
 
+// current cost for thing on current auction
 var cost int
+
+// index of current auction
+var ind int = 0
+
+// All items going on bid
+var itemlist []string
 
 func main() {
 	arguments := os.Args
@@ -36,8 +44,6 @@ func main() {
 	var sUConn net.Conn
 	// auctioneer username
 	var sUUser string
-	// All items going on bid
-	var itemlist []string
 
 	// Accept auctioneer, deny client
 	for {
@@ -92,6 +98,9 @@ func main() {
 		}
 	}
 
+	splitThing := strings.Split(itemlist[ind], "@")
+	cost, _ = strconv.Atoi(splitThing[2])
+
 	// after auctioneer connects, run all following messages from the auctioneer on a new thread
 	go uA.handleAuctioneerConnection(sUConn, sUUser)
 
@@ -112,6 +121,14 @@ func main() {
 		}
 
 		temp := strings.TrimSpace(string(netData))
+
+		if strings.HasPrefix(temp, "AUCTIONEER:") {
+			// another auctioneer tried to join
+			fmt.Fprintf(c, "An auction has already begun!")
+			c.Close()
+			continue
+		}
+
 		clientUnameDenom := strings.Split(temp, ":")
 
 		// get client username
@@ -144,20 +161,31 @@ func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 
 		temp := strings.TrimSpace(string(netData))
 		if temp == "STOP" {
-			discMess := "__User " + userName + " disconnected__"
+			discMess := "__Auctioneer " + userName + " disconnected__"
 			fmt.Println(discMess)
 			uA.sendAllElse(c, discMess)
 			uA.deleteUser(c)
 			break
+		} else if temp == "NEXT" {
+			fmt.Println("Next thing")
+			ind += 1
+			if ind == len(itemlist) {
+				fmt.Fprintln(c, "Auction Terminated")
+				break
+			}
+			splitThing := strings.Split(itemlist[ind], "@")
+			cost, _ = strconv.Atoi(splitThing[2])
+
+			mess := "Next thing on auction: " + splitThing[0] + "\tDescription: " + splitThing[1] + "\tStarting price: " + splitThing[2] + "\n"
+			fmt.Println(mess)
+			uA.sendAllElse(c, mess)
+		} else {
+			fmt.Fprintln(c, "Invalid input")
 		}
-
-		message := "User " + userName + ": " + temp
-
-		fmt.Println(message)
-		uA.sendAllElse(c, message)
-
+		fmt.Println(temp)
 	}
-	c.Close()
+	uA.closeAll()
+	os.Exit(0)
 }
 
 // Generates new read, handles disconnection, sends the message to all other connections
@@ -187,12 +215,19 @@ func (uA *UserArr) handleClient(c net.Conn, userName string, itemList []string) 
 			break
 		}
 
-		message := "User " + userName + ": " + temp
+		n, _ := strconv.Atoi(temp)
+		if n > cost {
+			cost = n
 
-		fmt.Println(message)
+			message := "User " + userName + ": " + temp
 
-		// inform all other clients of this client's new bid
-		uA.sendAllElse(c, message)
+			fmt.Println(message)
+
+			// inform all other clients of this client's new bid
+			uA.sendAllElse(c, message)
+		} else {
+			fmt.Fprintln(c, "Current cost is", cost, ", so your bid is too low. Increase bid.")
+		}
 
 	}
 	c.Close()
@@ -222,4 +257,12 @@ func (uA *UserArr) deleteUser(c net.Conn) {
 // adds a connection to the UserArr
 func (uA *UserArr) addCtoCL(c net.Conn, username string) {
 	uA.cl = append(uA.cl, c)
+}
+
+func (uA *UserArr) closeAll() {
+	for i := 0; i < len(uA.cl); i++ {
+		conn := uA.cl[i]
+		fmt.Fprintln(conn, "Auction Terminated")
+		conn.Close()
+	}
 }

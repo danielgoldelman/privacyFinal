@@ -130,9 +130,47 @@ func main() {
 
 	fmt.Fprint(c, "AUCTIONEER:"+arr[0]+":"+arr[1]+":"+formatarrT+"\n")
 
+	go auctioneerSend(c)
+
 	// reads from server, prints server send
 	for {
 		message, _ := bufio.NewReader(c).ReadString('\n')
+		mess := strings.TrimSpace(string(message))
+		if mess == "An auction has already begun!" {
+			break
+		} else if mess == "Auction Terminated" {
+			break
+		}
 		fmt.Print(message)
+	}
+	c.Close()
+	os.Exit(0)
+}
+
+func auctioneerSend(c net.Conn) {
+	for {
+		var mess string
+		scanner := bufio.NewScanner(os.Stdin)
+		for {
+			fmt.Print("\n")
+			// Scans a line from Stdin(Console)
+			scanner.Scan()
+			// Holds the string that scanned
+			text := scanner.Text()
+
+			// Client wants to exit the auction
+			message := strings.TrimSpace(string(text))
+			if message == "STOP" {
+				fmt.Println("TCP client exiting...")
+				os.Exit(0)
+			} else if message == "NEXT" {
+				mess = message
+				break
+			}
+			fmt.Println("Try Again!")
+		}
+
+		// only sends to server if the client input a number
+		fmt.Fprintln(c, fmt.Sprint(mess))
 	}
 }
