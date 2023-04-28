@@ -52,7 +52,7 @@ func main() {
 		fmt.Println("Try Again!")
 	}
 
-	var numThings int
+	numThings := 0
 
 	for {
 		fmt.Print("Enter Number of Things: ")
