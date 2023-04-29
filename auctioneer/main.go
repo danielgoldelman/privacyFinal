@@ -9,6 +9,9 @@ import (
 	"strings"
 )
 
+var publichash string
+var privatehash string
+
 func main() {
 	arguments := os.Args
 	if len(arguments) == 1 {
@@ -24,9 +27,16 @@ func main() {
 		return
 	}
 
+	// privatehash = generate private hash
+
+	// Loosely ecrypt this data -----------------------------
+	// publichash = generate public hash
+	// fmt.Fprintln(c, "AUCTIONEERPUBLIC:"+publichash)
+
+	scanner := bufio.NewScanner(os.Stdin)
+
 	// new array to hold auctioneer name, auctioneer denomination
 	arr := make([]string, 0)
-	scanner := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Print("Auctioneer Name: ")
 		// Scans a line from Stdin(Console)
@@ -127,6 +137,8 @@ func main() {
 	}
 
 	formatarrT := strings.Join(arrT, "~")
+
+	// full encryption of the username, denom, thing list
 
 	fmt.Fprint(c, "AUCTIONEER:"+arr[0]+":"+arr[1]+":"+formatarrT+"\n")
 

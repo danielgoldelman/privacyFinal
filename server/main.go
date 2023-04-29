@@ -18,6 +18,9 @@ var ind int = 0
 // All items going on bid
 var itemlist []string
 
+var publichash string
+var privatehash string
+
 func main() {
 	arguments := os.Args
 	if len(arguments) == 1 {
@@ -34,6 +37,11 @@ func main() {
 	}
 	// Closes the port completely after all connections close
 	defer l.Close()
+
+	// privatehash = generate private hash
+
+	// Loosely ecrypt this data -----------------------------
+	// publichash = generate public hash
 
 	// Array of all users' net connections
 	uA := UserArr{
@@ -63,6 +71,10 @@ func main() {
 
 		temp := strings.TrimSpace(string(netData))
 
+		// decrypt the string. should start with AUCTIONEERPUBLIC:--------------
+		// wait for the auctioneer's name, denom, thing list---------
+		// reject if client----------
+
 		if strings.HasPrefix(temp, "AUCTIONEER:") {
 			// if the connection is the auctioneer
 
@@ -89,6 +101,7 @@ func main() {
 			fmt.Println(thingDescPrice)
 
 			// adds auctioneer to connection list
+			// need to add the hash as well --------
 			uA.addCtoCL(c, userName)
 			break
 		} else {
@@ -114,6 +127,8 @@ func main() {
 		}
 
 		// reads in first connection (will be username and denomination of the new connection)
+		// will start with CLIENTPUBLIC: ----------, then client hash
+		// then will intake client username, denom
 		netData, err := bufio.NewReader(c).ReadString('\n')
 		if err != nil {
 			fmt.Println(err)
@@ -151,6 +166,7 @@ type UserArr struct {
 }
 
 // Generates new read, handles disconnection
+// should also have auctioneer's public key associated ---------
 func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 	for {
 		netData, err := bufio.NewReader(c).ReadString('\n')
@@ -171,6 +187,8 @@ func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 			ind += 1
 			if ind == len(itemlist) {
 				fmt.Fprintln(c, "Auction Terminated")
+				// need to impliment functionality to store winners and send to the auctioneer after auction concludes-----------
+				// will also need to decrypt the client winners and then send out to the auctioneer with encryption---------
 				break
 			}
 			splitThing := strings.Split(itemlist[ind], "@")
@@ -191,6 +209,10 @@ func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 // Generates new read, handles disconnection, sends the message to all other connections
 func (uA *UserArr) handleClient(c net.Conn, userName string, itemList []string) {
 	fmt.Fprintln(c, "Welcome! List of items:", itemList)
+
+	splitThing := strings.Split(itemlist[ind], "@")
+	cost, _ = strconv.Atoi(splitThing[2])
+	fmt.Fprintln(c, "Current item: "+splitThing[0]+"\tDescription: "+splitThing[1]+"\tStarting price: "+splitThing[2]+"\n")
 
 	for {
 		// on new message from this client
@@ -228,12 +250,12 @@ func (uA *UserArr) handleClient(c net.Conn, userName string, itemList []string) 
 		} else {
 			fmt.Fprintln(c, "Current cost is", cost, ", so your bid is too low. Increase bid.")
 		}
-
 	}
 	c.Close()
 }
 
 // given the UserArr, a connection, and a message, sends the message to all connections != c
+// will also have the hash associated ------------
 func (uA *UserArr) sendAllElse(c net.Conn, message string) {
 	for _, v := range uA.cl {
 		if v != c {
@@ -243,6 +265,7 @@ func (uA *UserArr) sendAllElse(c net.Conn, message string) {
 }
 
 // deletes a connection from the UserArr
+// will also have the hash associated ------------
 func (uA *UserArr) deleteUser(c net.Conn) {
 	var idx int
 	for i := 0; i < len(uA.cl); i++ {
@@ -255,10 +278,12 @@ func (uA *UserArr) deleteUser(c net.Conn) {
 }
 
 // adds a connection to the UserArr
+// will also have the hash associated ------------
 func (uA *UserArr) addCtoCL(c net.Conn, username string) {
 	uA.cl = append(uA.cl, c)
 }
 
+// will also have the hash associated ------------
 func (uA *UserArr) closeAll() {
 	for i := 0; i < len(uA.cl); i++ {
 		conn := uA.cl[i]

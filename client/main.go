@@ -9,6 +9,9 @@ import (
 	"strings"
 )
 
+var publichash string
+var privatehash string
+
 func main() {
 	arguments := os.Args
 	if len(arguments) == 1 {
@@ -22,6 +25,12 @@ func main() {
 		fmt.Println(err)
 		return
 	}
+
+	// privatehash = generate private hash
+
+	// Loosely ecrypt this data -----------------------------
+	// publichash = generate public hash
+	// fmt.Fprintln(c, "CLIENTPUBLIC:"+publichash)
 
 	arr := make([]string, 0)
 	scanner := bufio.NewScanner(os.Stdin)
