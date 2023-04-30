@@ -2,6 +2,10 @@ package main
 
 import (
 	"bufio"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"os"
@@ -18,8 +22,8 @@ var ind int = 0
 // All items going on bid
 var itemlist []string
 
-var publichash string
-var privatehash string
+var publichash *rsa.PublicKey
+var privatehash *rsa.PrivateKey
 
 func main() {
 	arguments := os.Args
@@ -37,11 +41,6 @@ func main() {
 	}
 	// Closes the port completely after all connections close
 	defer l.Close()
-
-	// privatehash = generate private hash
-
-	// Loosely ecrypt this data -----------------------------
-	// publichash = generate public hash
 
 	// Array of all users' net connections
 	uA := UserArr{
@@ -290,4 +289,33 @@ func (uA *UserArr) closeAll() {
 		fmt.Fprintln(conn, "Auction Terminated")
 		conn.Close()
 	}
+}
+
+// CRYPTO FUNCTIONS
+
+func GenerateRsaKeyPair() (*rsa.PrivateKey, *rsa.PublicKey) {
+	privkey, _ := rsa.GenerateKey(rand.Reader, 2048)
+	return privkey, &privkey.PublicKey
+}
+
+func RSA_Encrypt(secretMessage string, key rsa.PublicKey) string {
+	label := []byte("OAEP Encrypted")
+	rng := rand.Reader
+	ciphertext, err := rsa.EncryptOAEP(sha256.New(), rng, &key, []byte(secretMessage), label)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	return base64.StdEncoding.EncodeToString(ciphertext)
+}
+
+func RSA_Decrypt(cipherText string, privKey rsa.PrivateKey) string {
+	ct, _ := base64.StdEncoding.DecodeString(cipherText)
+	label := []byte("OAEP Encrypted")
+	rng := rand.Reader
+	plaintext, err := rsa.DecryptOAEP(sha256.New(), rng, &privKey, ct, label)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	fmt.Println("Decrypted message: \n", string(plaintext))
+	return string(plaintext)
 }
