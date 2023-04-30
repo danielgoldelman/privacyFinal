@@ -2,6 +2,10 @@ package main
 
 import (
 	"bufio"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"os"
@@ -9,8 +13,8 @@ import (
 	"strings"
 )
 
-var publichash string
-var privatehash string
+var publichash *rsa.PublicKey
+var privatehash *rsa.PrivateKey
 
 func main() {
 	arguments := os.Args
@@ -113,4 +117,21 @@ func runClient(c net.Conn) {
 		// only sends to server if the client input a number
 		fmt.Fprintln(c, fmt.Sprint(num))
 	}
+}
+
+// CRYPTO FUNCTIONS
+
+func GenerateRsaKeyPair() (*rsa.PrivateKey, *rsa.PublicKey) {
+	privkey, _ := rsa.GenerateKey(rand.Reader, 2048)
+	return privkey, &privkey.PublicKey
+}
+
+func RSA_Encrypt(secretMessage string, key rsa.PublicKey) string {
+	label := []byte("OAEP Encrypted")
+	rng := rand.Reader
+	ciphertext, err := rsa.EncryptOAEP(sha256.New(), rng, &key, []byte(secretMessage), label)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	return base64.StdEncoding.EncodeToString(ciphertext)
 }
