@@ -10,7 +10,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"log"
 	"math/big"
 	"net"
 	"os"
@@ -30,6 +29,7 @@ var name string
 // All items going on bid
 var itemlist []string
 
+// holders for public / private keys
 var serverPublic *rsa.PublicKey
 var serverPrivate *rsa.PrivateKey
 var auctioneerPublic *rsa.PublicKey
@@ -61,9 +61,6 @@ func main() {
 	defer l.Close()
 
 	serverPrivate, serverPublic = GenerateRsaKeyPair()
-	// auctioneerPublic, _ := StringToRsaPublicKey(getFromFile("auctioneerPublic.txt"))
-	// serverPublic, _ = StringToRsaPublicKey(getFromFile("serverPublic.txt"))
-	// serverPrivate, _ = StringToRsaPrivateKey(getFromFile("serverPrivate.txt"))
 
 	// Array of all users' net connections
 	uA := UserArr{
@@ -90,10 +87,7 @@ func main() {
 
 		temp := strings.TrimSpace(string(netData))
 
-		// decrypt the string. should start with AUCTIONEERPUBLIC:--------------
-		// wait for the auctioneer's name, denom, thing list---------
-		// reject if client----------
-
+		// decrypt the string, should start with AUCTIONEERPUB:
 		if strings.HasPrefix(temp, "AUCTIONEERPUB:") {
 			// if the connection is the auctioneer
 
@@ -104,6 +98,7 @@ func main() {
 			auctioneerPublic = aPub
 			sSPub, _ := RsaPublicKeyToString(serverPublic)
 
+			// send server public key to client
 			fmt.Fprint(sUConn, "SERVERPUB:"+sSPub+"#")
 
 			// reads in first connection
@@ -115,6 +110,7 @@ func main() {
 
 			temp := strings.TrimSpace(string(netData))
 
+			// checking if the auctioneer sent their name, denomination, and list
 			if strings.HasPrefix(temp, "AUCTIONEERNDL:") {
 				splitRet := strings.Split(temp, ":")
 				uDL := splitRet[1]
@@ -139,21 +135,24 @@ func main() {
 
 				break
 			} else {
+				// should never happen
 				fmt.Println("SOMETHING WENT WRONG")
 				c.Close()
 				os.Exit(0)
 			}
 
 		} else {
-			fmt.Println("Client tried to connect too early")
 			// first connection was not the auctioneer
+			fmt.Println("Client tried to connect too early")
 			fmt.Fprintln(c, "Please wait for the auction to begin!")
 			c.Close()
 		}
 	}
 
 	splitThing := strings.Split(itemlist[ind], "#")
+	// set first item name
 	name = splitThing[0]
+	// set first item cost
 	cost, _ = strconv.Atoi(splitThing[2])
 
 	// after auctioneer connects, run all following messages from the auctioneer on a new thread
@@ -168,9 +167,7 @@ func main() {
 			return
 		}
 
-		// reads in first connection (will be username and denomination of the new connection)
-		// will start with CLIENTPUBLIC: ----------, then client hash
-		// then will intake client username, denom
+		// reads in first connection, should be the client saying hello
 		netData, err := bufio.NewReader(c).ReadString('\n')
 		if err != nil {
 			fmt.Println(err)
@@ -186,10 +183,11 @@ func main() {
 			continue
 		}
 
+		// now that we know this is a client, run this client on its own thread to not slow down any other new connections
 		go func() {
-
 			sSPub, _ := RsaPublicKeyToString(serverPublic)
 
+			// send server public key to client
 			fmt.Fprintln(c, "SERVERPUB:"+sSPub+"#")
 
 			netData2, err2 := bufio.NewReader(c).ReadString('\n')
@@ -200,6 +198,7 @@ func main() {
 
 			temp2 := strings.TrimSpace(string(netData2))
 
+			// get username and denomination from client
 			splitRet2 := strings.Split(temp2, ":")
 			uD := splitRet2[1]
 			salt2 := splitRet2[2]
@@ -225,11 +224,13 @@ func main() {
 	}
 }
 
+// individual winner object
 type winnerInd struct {
 	item   string
 	winner string
 }
 
+// general type to hold client list (list of connections), winner list (list of (item name * winner name)), and user list (map from net.conn to username)
 type UserArr struct {
 	cl []net.Conn
 	wl []winnerInd
@@ -237,7 +238,6 @@ type UserArr struct {
 }
 
 // Generates new read, handles disconnection
-// should also have auctioneer's public key associated ---------
 func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 	for {
 		netData, err := bufio.NewReader(c).ReadString('\n')
@@ -252,9 +252,13 @@ func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 			discMess := "__Auctioneer disconnected__"
 			fmt.Println(discMess)
 			uA.sendAllElse(c, discMess)
+
+			// get last winner
 			uA.wl = append(uA.wl, winnerInd{item: name, winner: lastBidder})
 			winnerList := winnersToString(uA.wl)
 			encryptedMessage, salt := Salt_and_RSA_Encrypt(winnerList, 16, *auctioneerPublic)
+
+			// Send winner list to client, encrypted with their public key
 			fmt.Fprintln(c, "STOPRET:"+encryptedMessage+":"+salt)
 			break
 		} else if temp == "NEXT" {
@@ -264,16 +268,23 @@ func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 			ind += 1
 			if ind == len(itemlist) {
 				fmt.Fprintln(c, "Auction Terminated")
+
+				// see the winner list on the server
 				fmt.Println(uA.wl)
 				winnerList := winnersToString(uA.wl)
 				encryptedMessage, salt := Salt_and_RSA_Encrypt(winnerList, 16, *auctioneerPublic)
+
+				// Send winner list to client, encrypted with their public key
 				fmt.Fprintln(c, encryptedMessage+":"+salt)
 				break
 			}
+
+			// setup new item for bid
 			splitThing := strings.Split(itemlist[ind], "#")
 			name = splitThing[0]
 			cost, _ = strconv.Atoi(splitThing[2])
 
+			// inform all clients of next thing on auction
 			mess := "Next thing on auction: " + splitThing[0] + "$Description: " + splitThing[1] + "$Starting price: " + splitThing[2]
 			fmt.Println(mess)
 			uA.sendAllElse(c, mess)
@@ -282,7 +293,7 @@ func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 		}
 		fmt.Println(temp)
 	}
-	uA.closeAll()
+	uA.sendAllElse(c, "Auction Terminated")
 	c.Close()
 	os.Exit(0)
 }
@@ -314,6 +325,7 @@ func (uA *UserArr) handleClient(c net.Conn, userName string, itemList []string) 
 
 			// inform all other clients that this client has left
 			uA.sendAllElse(c, discMess)
+			sendToAuc(discMess)
 
 			// delete the user from the client list
 			uA.deleteUser(c)
@@ -332,6 +344,7 @@ func (uA *UserArr) handleClient(c net.Conn, userName string, itemList []string) 
 
 			// inform all other clients of this client's new bid
 			uA.sendAllElse(c, message)
+			sendToAuc(message)
 		} else {
 			fmt.Fprintln(c, "Current cost is", cost, ", so your bid is too low. Increase bid.")
 		}
@@ -340,21 +353,20 @@ func (uA *UserArr) handleClient(c net.Conn, userName string, itemList []string) 
 }
 
 // given the UserArr, a connection, and a message, sends the message to all connections != c
-// will also have the hash associated ------------
 func (uA *UserArr) sendAllElse(c net.Conn, message string) {
 	for _, v := range uA.cl {
 		if v != c {
 			fmt.Fprintln(v, message)
 		}
 	}
+}
 
-	if c != sUConn {
-		fmt.Fprintln(sUConn, message)
-	}
+// send a message to the auctioneer
+func sendToAuc(message string) {
+	fmt.Println(sUConn, message)
 }
 
 // deletes a connection from the UserArr
-// will also have the hash associated ------------
 func (uA *UserArr) deleteUser(c net.Conn) {
 	var idx int
 	for i := 0; i < len(uA.cl); i++ {
@@ -368,19 +380,9 @@ func (uA *UserArr) deleteUser(c net.Conn) {
 }
 
 // adds a connection to the UserArr
-// will also have the hash associated ------------
 func (uA *UserArr) addCtoCL(c net.Conn, username string) {
 	uA.cl = append(uA.cl, c)
 	uA.ul[c] = username
-}
-
-// will also have the hash associated ------------
-func (uA *UserArr) closeAll() {
-	for i := 0; i < len(uA.cl); i++ {
-		conn := uA.cl[i]
-		fmt.Fprintln(conn, "Auction Terminated")
-		conn.Close()
-	}
 }
 
 func winnersToString(wl []winnerInd) string {
@@ -520,13 +522,4 @@ func StringToRsaPublicKey(pubStr string) (*rsa.PublicKey, error) {
 	}
 
 	return rsaPub, nil
-}
-
-func getFromFile(filename string) string {
-	// Open the file for reading
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return string(data)
 }

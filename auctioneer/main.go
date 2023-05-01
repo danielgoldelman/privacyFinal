@@ -10,7 +10,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"log"
 	"math/big"
 	"net"
 	"os"
@@ -18,6 +17,7 @@ import (
 	"strings"
 )
 
+// holders for public / private keys
 var auctioneerPublic *rsa.PublicKey
 var auctioneerPrivate *rsa.PrivateKey
 var serverPublic *rsa.PublicKey
@@ -38,9 +38,6 @@ func main() {
 	}
 
 	auctioneerPrivate, auctioneerPublic = GenerateRsaKeyPair()
-
-	// auctioneerPublic, _ = StringToRsaPublicKey(getFromFile("auctioneerPublic.txt"))
-	// auctioneerPrivate, _ = StringToRsaPrivateKey(getFromFile("auctioneerPrivate.txt"))
 
 	auctioneerPublicAsString, _ := RsaPublicKeyToString(auctioneerPublic)
 
@@ -107,7 +104,7 @@ func main() {
 
 	// takes in user input, sends to server
 	arrT := make([]string, 0)
-	for i := 0; i < numThings; i++ {
+	for i := 1; i <= numThings; i++ {
 		arrIndiv := make([]string, 0)
 		for {
 			fmt.Print("Enter Thing: ")
@@ -143,8 +140,7 @@ func main() {
 			// ensures the auctioneer used an integer
 			if len(text) != 0 {
 				if n, e := strconv.Atoi(text); e == nil {
-					numThings = n
-					arrIndiv = append(arrIndiv, text)
+					arrIndiv = append(arrIndiv, strconv.Itoa(n))
 					break
 				}
 			}
@@ -157,7 +153,7 @@ func main() {
 		// appends the above string to the list of things being auctioned
 		arrT = append(arrT, formatIndiv)
 
-		fmt.Print("\n\n\n")
+		fmt.Print("\n\n")
 	}
 
 	formatarrT := strings.Join(arrT, "~")
@@ -364,13 +360,4 @@ func StringToRsaPublicKey(pubStr string) (*rsa.PublicKey, error) {
 	}
 
 	return rsaPub, nil
-}
-
-func getFromFile(filename string) string {
-	// Open the file for reading
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return string(data)
 }
