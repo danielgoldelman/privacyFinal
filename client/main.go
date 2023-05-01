@@ -10,7 +10,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"log"
 	"math/big"
 	"net"
 	"os"
@@ -18,6 +17,7 @@ import (
 	"strings"
 )
 
+// holders for public keys
 var serverPublic *rsa.PublicKey
 
 func main() {
@@ -47,8 +47,6 @@ func main() {
 	temp := messTrimmed[10 : len(messTrimmed)-1]
 	sSPub, _ := StringToRsaPublicKey(temp)
 	serverPublic = sSPub
-
-	// serverPublic, _ = StringToRsaPublicKey(getFromFile("serverPublic.txt"))
 
 	scanner := bufio.NewScanner(os.Stdin)
 	var uName string
@@ -216,13 +214,4 @@ func StringToRsaPublicKey(pubStr string) (*rsa.PublicKey, error) {
 	}
 
 	return rsaPub, nil
-}
-
-func getFromFile(filename string) string {
-	// Open the file for reading
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return string(data)
 }
