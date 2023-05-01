@@ -1,0 +1,3 @@
+[
+    {"auctionID": int, "serverpub": publickey, "serverpri": prikey}
+]
