@@ -31,10 +31,9 @@ A few notes:
 - Denomination does not matter yet
 - Auctioneer has to join before a client can, otherwise it will reject the connection
 
+- long term storage and encryption
+
 - Number of things still has some bugs...
 
-- Validation of user input has to happen
-    - we dont want usernames to include ":" or "@"
+- we dont want usernames to include ":" or "#"
 - Stop there from being two users of the same username
-- keep record of who won what auction and their username (later email address as well???)
-- check # of inputs to make correct
