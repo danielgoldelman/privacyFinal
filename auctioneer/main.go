@@ -10,6 +10,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 	"net"
 	"os"
@@ -37,6 +38,24 @@ func main() {
 	}
 
 	auctioneerPrivate, auctioneerPublic = GenerateRsaKeyPair()
+
+	// auctioneerPublic, _ = StringToRsaPublicKey(getFromFile("auctioneerPublic.txt"))
+	// auctioneerPrivate, _ = StringToRsaPrivateKey(getFromFile("auctioneerPrivate.txt"))
+
+	auctioneerPublicAsString, _ := RsaPublicKeyToString(auctioneerPublic)
+
+	fmt.Fprint(c, "AUCTIONEERPUB:"+auctioneerPublicAsString+"#")
+	message, _ := bufio.NewReader(c).ReadString('#')
+	mess := strings.TrimSpace(string(message))
+	if mess == "An auction has already begun!" {
+		fmt.Print(mess)
+		c.Close()
+		os.Exit(0)
+	} else {
+		temp := message[10 : len(message)-1]
+		sSPub, _ := StringToRsaPublicKey(temp)
+		serverPublic = sSPub
+	}
 
 	scanner := bufio.NewScanner(os.Stdin)
 
@@ -145,7 +164,10 @@ func main() {
 
 	// full encryption of the username, denom, thing list
 
-	fmt.Fprint(c, "AUCTIONEER:"+arr[0]+":"+arr[1]+":"+formatarrT+"\n")
+	nameDenomList := arr[0] + ":" + arr[1] + ":" + formatarrT
+	encryptedMessage, salt := Salt_and_RSA_Encrypt(nameDenomList, 16, *serverPublic)
+
+	fmt.Fprintln(c, "AUCTIONEERNDL:"+encryptedMessage+":"+salt)
 
 	go auctioneerSend(c)
 
@@ -156,7 +178,30 @@ func main() {
 		if mess == "An auction has already begun!" {
 			break
 		} else if mess == "Auction Terminated" {
+			netData, err := bufio.NewReader(c).ReadString('\n')
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+
+			temp := strings.TrimSpace(string(netData))
+
+			splitRet := strings.Split(temp, ":")
+			winnerListEncrypted := splitRet[0]
+			salt := splitRet[1]
+
+			winnerData := RSA_Decrypt_rmv_Salt(winnerListEncrypted, salt, *auctioneerPrivate)
+			fmt.Println(winnerData)
 			break
+		} else if strings.HasPrefix(mess, "STOPRET:") {
+			splitRet := strings.Split(mess, ":")
+			winnerListEncrypted := splitRet[1]
+			salt := splitRet[2]
+
+			winnerData := RSA_Decrypt_rmv_Salt(winnerListEncrypted, salt, *auctioneerPrivate)
+			fmt.Println(winnerData)
+
+			os.Exit(0)
 		}
 		fmt.Print(message)
 	}
@@ -169,7 +214,6 @@ func auctioneerSend(c net.Conn) {
 		var mess string
 		scanner := bufio.NewScanner(os.Stdin)
 		for {
-			fmt.Print("\n")
 			// Scans a line from Stdin(Console)
 			scanner.Scan()
 			// Holds the string that scanned
@@ -178,8 +222,8 @@ func auctioneerSend(c net.Conn) {
 			// Client wants to exit the auction
 			message := strings.TrimSpace(string(text))
 			if message == "STOP" {
-				fmt.Println("TCP client exiting...")
-				os.Exit(0)
+				mess = message
+				break
 			} else if message == "NEXT" {
 				mess = message
 				break
@@ -187,7 +231,6 @@ func auctioneerSend(c net.Conn) {
 			fmt.Println("Try Again!")
 		}
 
-		// only sends to server if the client input a number
 		fmt.Fprintln(c, fmt.Sprint(mess))
 	}
 }
@@ -245,56 +288,67 @@ func Salt_and_RSA_Encrypt(msg string, salt_len int, pubkey rsa.PublicKey) (strin
 	salted_msg, salt := salt_msg(msg, salt_len)
 	encrypted_salted_msg := RSA_Encrypt(salted_msg, pubkey)
 	return encrypted_salted_msg, salt
-
 }
 
 func RSA_Decrypt_rmv_Salt(encrypted_salted_msg string, salt string, privKey rsa.PrivateKey) string {
 	decrypted_salted_msg := RSA_Decrypt(encrypted_salted_msg, privKey)
 	decrypted_msg, _ := strings.CutSuffix(decrypted_salted_msg, salt)
 	return decrypted_msg
-
 }
 
-func ExportRsaPrivateKeyAsPemStr(privkey *rsa.PrivateKey) string {
-	privkey_bytes := x509.MarshalPKCS1PrivateKey(privkey)
-	privkey_pem := pem.EncodeToMemory(
-		&pem.Block{
-			Type:  "RSA PRIVATE KEY",
-			Bytes: privkey_bytes,
-		},
-	)
-	return string(privkey_pem)
+// Function to convert an RSA private key to a string
+func RsaPrivateKeyToString(privKey *rsa.PrivateKey) (string, error) {
+	// Marshal the private key into DER format
+	derBytes := x509.MarshalPKCS1PrivateKey(privKey)
+
+	// Encode the DER bytes in PEM format
+	pemBytes := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: derBytes,
+	})
+
+	// Convert the PEM bytes to a string and return it
+	return string(pemBytes), nil
 }
 
-func ParseRsaPrivateKeyFromPemStr(privPEM string) (*rsa.PrivateKey, error) {
-	block, _ := pem.Decode([]byte(privPEM))
+// Function to convert a string to an RSA private key
+func StringToRsaPrivateKey(privKeyString string) (*rsa.PrivateKey, error) {
+	// Decode the PEM-encoded private key string
+	block, _ := pem.Decode([]byte(privKeyString))
 	if block == nil {
 		return nil, errors.New("failed to parse PEM block containing the key")
 	}
 
-	priv, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	// Parse the DER-encoded private key bytes
+	privKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	if err != nil {
 		return nil, err
 	}
-	return priv, nil
+
+	return privKey, nil
 }
 
-func ExportRsaPublicKeyAsPemStr(pubkey *rsa.PublicKey) (string, error) {
-	pubkey_bytes, err := x509.MarshalPKIXPublicKey(pubkey)
+// Function to convert an RSA public key to a string
+func RsaPublicKeyToString(pubKey *rsa.PublicKey) (string, error) {
+	// Marshal the public key into DER format
+	derBytes, err := x509.MarshalPKIXPublicKey(pubKey)
 	if err != nil {
 		return "", err
 	}
-	pubkey_pem := pem.EncodeToMemory(
-		&pem.Block{
-			Type:  "RSA PUBLIC KEY",
-			Bytes: pubkey_bytes,
-		},
-	)
-	return string(pubkey_pem), nil
+
+	// Encode the DER bytes in PEM format
+	pemBytes := pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: derBytes,
+	})
+
+	// Convert the PEM bytes to a string and return it
+	return string(pemBytes), nil
 }
 
-func ParseRsaPublicKeyFromPemStr(pubPEM string) (*rsa.PublicKey, error) {
-	block, _ := pem.Decode([]byte(pubPEM))
+// StringToPublicKey converts a string to an RSA public key.
+func StringToRsaPublicKey(pubStr string) (*rsa.PublicKey, error) {
+	block, _ := pem.Decode([]byte(pubStr))
 	if block == nil {
 		return nil, errors.New("failed to parse PEM block containing the key")
 	}
@@ -304,11 +358,19 @@ func ParseRsaPublicKeyFromPemStr(pubPEM string) (*rsa.PublicKey, error) {
 		return nil, err
 	}
 
-	switch pub := pub.(type) {
-	case *rsa.PublicKey:
-		return pub, nil
-	default:
-		break // fall through
+	rsaPub, ok := pub.(*rsa.PublicKey)
+	if !ok {
+		return nil, errors.New("key type is not RSA")
 	}
-	return nil, errors.New("key type is not RSA")
+
+	return rsaPub, nil
+}
+
+func getFromFile(filename string) string {
+	// Open the file for reading
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return string(data)
 }

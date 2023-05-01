@@ -110,63 +110,71 @@ func RSA_Decrypt_rmv_Salt(encrypted_salted_msg string, salt string, privKey rsa.
 	decrypted_salted_msg := RSA_Decrypt(encrypted_salted_msg, privKey)
 	decrypted_msg, _ := strings.CutSuffix(decrypted_salted_msg, salt)
 	return decrypted_msg
-
 }
 
-func ExportRsaPrivateKeyAsPemStr(privkey *rsa.PrivateKey) string {
-	privkey_bytes := x509.MarshalPKCS1PrivateKey(privkey)
-	privkey_pem := pem.EncodeToMemory(
-		&pem.Block{
-			Type:  "RSA PRIVATE KEY",
-			Bytes: privkey_bytes,
-		},
-	)
-	return string(privkey_pem)
+// Function to convert an RSA private key to a string
+func RsaPrivateKeyToString(privKey *rsa.PrivateKey) (string, error) {
+	// Marshal the private key into DER format
+	derBytes := x509.MarshalPKCS1PrivateKey(privKey)
+
+	// Encode the DER bytes in PEM format
+	pemBytes := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: derBytes,
+	})
+
+	// Convert the PEM bytes to a string and return it
+	return string(pemBytes), nil
 }
 
-func ParseRsaPrivateKeyFromPemStr(privPEM string) (*rsa.PrivateKey, error) {
-	block, _ := pem.Decode([]byte(privPEM))
+// Function to convert a string to an RSA private key
+func StringToRsaPrivateKey(privKeyString string) (*rsa.PrivateKey, error) {
+	// Decode the PEM-encoded private key string
+	block, _ := pem.Decode([]byte(privKeyString))
 	if block == nil {
 		return nil, errors.New("failed to parse PEM block containing the key")
 	}
 
-	priv, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	// Parse the DER-encoded private key bytes
+	privKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	if err != nil {
 		return nil, err
 	}
-	return priv, nil
+
+	return privKey, nil
 }
 
-func ExportRsaPublicKeyAsPemStr(pubkey *rsa.PublicKey) (string, error) {
-	pubkey_bytes, err := x509.MarshalPKIXPublicKey(pubkey)
+// Function to convert an RSA public key to a string
+func RsaPublicKeyToString(pubKey *rsa.PublicKey) (string, error) {
+	// Marshal the public key into DER format
+	derBytes, err := x509.MarshalPKIXPublicKey(pubKey)
 	if err != nil {
 		return "", err
 	}
-	pubkey_pem := pem.EncodeToMemory(
-		&pem.Block{
-			Type:  "RSA PUBLIC KEY",
-			Bytes: pubkey_bytes,
-		},
-	)
-	return string(pubkey_pem), nil
+
+	// Encode the DER bytes in PEM format
+	pemBytes := pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: derBytes,
+	})
+
+	// Convert the PEM bytes to a string and return it
+	return string(pemBytes), nil
 }
 
-func ParseRsaPublicKeyFromPemStr(pubPEM string) (*rsa.PublicKey, error) {
-	block, _ := pem.Decode([]byte(pubPEM))
+// Function to convert a string to an RSA public key
+func StringToRsaPublicKey(pubKeyString string) (*rsa.PublicKey, error) {
+	// Decode the PEM-encoded public key string
+	block, _ := pem.Decode([]byte(pubKeyString))
 	if block == nil {
 		return nil, errors.New("failed to parse PEM block containing the key")
 	}
 
-	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	// Parse the DER-encoded public key bytes
+	pubKey, err := x509.ParsePKCS1PublicKey(block.Bytes)
 	if err != nil {
 		return nil, err
 	}
 
-	switch pub := pub.(type) {
-	case *rsa.PublicKey:
-		return pub, nil
-	default:
-		break // fall through
-	}
-	return nil, errors.New("key type is not RSA")
+	return pubKey, nil
 }

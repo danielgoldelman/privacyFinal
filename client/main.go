@@ -10,12 +10,15 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 	"net"
 	"os"
 	"strconv"
 	"strings"
 )
+
+var serverPublic *rsa.PublicKey
 
 func main() {
 	arguments := os.Args
@@ -31,11 +34,25 @@ func main() {
 		return
 	}
 
-	// privatehash, publichash = GenerateRsaKeyPair()
-	// fmt.Fprintln(c, "CLIENTPUBLIC:"+publichash)
+	fmt.Fprintln(c, "Client#")
+	fmt.Println("The auction will begin shortly.")
 
-	arr := make([]string, 0)
+	message, _ := bufio.NewReader(c).ReadString('#')
+	messTrimmed := strings.TrimSpace(string(message))
+	if messTrimmed == "Please wait for the auction to begin!" {
+		fmt.Println(messTrimmed)
+		c.Close()
+		os.Exit(0)
+	}
+	temp := messTrimmed[10 : len(messTrimmed)-1]
+	sSPub, _ := StringToRsaPublicKey(temp)
+	serverPublic = sSPub
+
+	// serverPublic, _ = StringToRsaPublicKey(getFromFile("serverPublic.txt"))
+
 	scanner := bufio.NewScanner(os.Stdin)
+	var uName string
+	var uDenom string
 	for {
 		fmt.Print("Client Name: ")
 		// Scans a line from Stdin(Console)
@@ -43,7 +60,7 @@ func main() {
 		// Holds the string that scanned
 		text := scanner.Text()
 		if len(text) != 0 {
-			arr = append(arr, text)
+			uName = text
 			break
 		}
 		fmt.Println("Try Again!")
@@ -55,15 +72,16 @@ func main() {
 		// Holds the string that scanned
 		text := scanner.Text()
 		if len(text) != 0 {
-			arr = append(arr, text)
+			uDenom = text
 			break
 		}
 		fmt.Println("Try Again!")
 	}
-	uName := arr[0]
-	uDenom := arr[1]
 
-	fmt.Fprintln(c, "Username:"+uName+":"+uDenom)
+	nameDenom := "Username:" + uName + ":" + uDenom
+	encryptedMessage, salt := Salt_and_RSA_Encrypt(nameDenom, 16, *serverPublic)
+
+	fmt.Fprintln(c, "CLIENTND:"+encryptedMessage+":"+salt)
 
 	// starts separate thread for this for loop
 
@@ -81,8 +99,24 @@ func main() {
 			fmt.Println(messTrimmed)
 			c.Close()
 			os.Exit(0)
+		} else if messTrimmed == "bye" {
+			c.Close()
+			os.Exit(0)
+		} else if strings.HasPrefix(messTrimmed, "Welcome") {
+			fmt.Print("\n\n")
+			for _, msg := range strings.Split(messTrimmed, "$") {
+				fmt.Println(msg)
+			}
+			fmt.Print("\n\n")
+		} else if strings.HasPrefix(messTrimmed, "Next thing on auction") {
+			fmt.Print("\n\n")
+			for _, msg := range strings.Split(messTrimmed, "$") {
+				fmt.Println(msg)
+			}
+			fmt.Print("\n\n")
+		} else {
+			fmt.Println(messTrimmed)
 		}
-		fmt.Println(messTrimmed)
 	}
 }
 
@@ -98,8 +132,9 @@ func runClient(c net.Conn) {
 
 			// Client wants to exit the auction
 			if strings.TrimSpace(string(text)) == "STOP" {
-				fmt.Println("TCP client exiting...")
-				os.Exit(0)
+				fmt.Println("Disconnecting...")
+				fmt.Fprintln(c, "STOP")
+				return
 			}
 
 			// ensures the client used an integer
@@ -162,8 +197,10 @@ func Salt_and_RSA_Encrypt(msg string, salt_len int, pubkey rsa.PublicKey) (strin
 	encrypted_salted_msg := RSA_Encrypt(salted_msg, pubkey)
 	return encrypted_salted_msg, salt
 }
-func ParseRsaPublicKeyFromPemStr(pubPEM string) (*rsa.PublicKey, error) {
-	block, _ := pem.Decode([]byte(pubPEM))
+
+// StringToPublicKey converts a string to an RSA public key.
+func StringToRsaPublicKey(pubStr string) (*rsa.PublicKey, error) {
+	block, _ := pem.Decode([]byte(pubStr))
 	if block == nil {
 		return nil, errors.New("failed to parse PEM block containing the key")
 	}
@@ -173,11 +210,19 @@ func ParseRsaPublicKeyFromPemStr(pubPEM string) (*rsa.PublicKey, error) {
 		return nil, err
 	}
 
-	switch pub := pub.(type) {
-	case *rsa.PublicKey:
-		return pub, nil
-	default:
-		break // fall through
+	rsaPub, ok := pub.(*rsa.PublicKey)
+	if !ok {
+		return nil, errors.New("key type is not RSA")
 	}
-	return nil, errors.New("Key type is not RSA")
+
+	return rsaPub, nil
+}
+
+func getFromFile(filename string) string {
+	// Open the file for reading
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return string(data)
 }
