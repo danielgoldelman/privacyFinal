@@ -5,8 +5,12 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
+	"encoding/pem"
+	"errors"
 	"fmt"
+	"math/big"
 	"net"
 	"os"
 	"strconv"
@@ -22,8 +26,9 @@ var ind int = 0
 // All items going on bid
 var itemlist []string
 
-var publichash *rsa.PublicKey
-var privatehash *rsa.PrivateKey
+var serverPublic *rsa.PublicKey
+var serverPrivate *rsa.PrivateKey
+var auctioneerPublic *rsa.PublicKey
 
 func main() {
 	arguments := os.Args
@@ -41,6 +46,8 @@ func main() {
 	}
 	// Closes the port completely after all connections close
 	defer l.Close()
+
+	serverPrivate, serverPublic = GenerateRsaKeyPair()
 
 	// Array of all users' net connections
 	uA := UserArr{
@@ -110,7 +117,7 @@ func main() {
 		}
 	}
 
-	splitThing := strings.Split(itemlist[ind], "@")
+	splitThing := strings.Split(itemlist[ind], "#")
 	cost, _ = strconv.Atoi(splitThing[2])
 
 	// after auctioneer connects, run all following messages from the auctioneer on a new thread
@@ -190,7 +197,7 @@ func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 				// will also need to decrypt the client winners and then send out to the auctioneer with encryption---------
 				break
 			}
-			splitThing := strings.Split(itemlist[ind], "@")
+			splitThing := strings.Split(itemlist[ind], "#")
 			cost, _ = strconv.Atoi(splitThing[2])
 
 			mess := "Next thing on auction: " + splitThing[0] + "\tDescription: " + splitThing[1] + "\tStarting price: " + splitThing[2] + "\n"
@@ -209,7 +216,7 @@ func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 func (uA *UserArr) handleClient(c net.Conn, userName string, itemList []string) {
 	fmt.Fprintln(c, "Welcome! List of items:", itemList)
 
-	splitThing := strings.Split(itemlist[ind], "@")
+	splitThing := strings.Split(itemlist[ind], "#")
 	cost, _ = strconv.Atoi(splitThing[2])
 	fmt.Fprintln(c, "Current item: "+splitThing[0]+"\tDescription: "+splitThing[1]+"\tStarting price: "+splitThing[2]+"\n")
 
@@ -293,6 +300,12 @@ func (uA *UserArr) closeAll() {
 
 // CRYPTO FUNCTIONS
 
+func CheckError(e error) {
+	if e != nil {
+		fmt.Println(e.Error())
+	}
+}
+
 func GenerateRsaKeyPair() (*rsa.PrivateKey, *rsa.PublicKey) {
 	privkey, _ := rsa.GenerateKey(rand.Reader, 2048)
 	return privkey, &privkey.PublicKey
@@ -302,9 +315,7 @@ func RSA_Encrypt(secretMessage string, key rsa.PublicKey) string {
 	label := []byte("OAEP Encrypted")
 	rng := rand.Reader
 	ciphertext, err := rsa.EncryptOAEP(sha256.New(), rng, &key, []byte(secretMessage), label)
-	if err != nil {
-		fmt.Println(err.Error())
-	}
+	CheckError(err)
 	return base64.StdEncoding.EncodeToString(ciphertext)
 }
 
@@ -313,9 +324,97 @@ func RSA_Decrypt(cipherText string, privKey rsa.PrivateKey) string {
 	label := []byte("OAEP Encrypted")
 	rng := rand.Reader
 	plaintext, err := rsa.DecryptOAEP(sha256.New(), rng, &privKey, ct, label)
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-	fmt.Println("Decrypted message: \n", string(plaintext))
+	CheckError(err)
 	return string(plaintext)
+}
+
+func GenerateRandomString(n int) (string, error) {
+	const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-!$^&*"
+	ret := make([]byte, n)
+	for i := 0; i < n; i++ {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
+		if err != nil {
+			return "", err
+		}
+		ret[i] = chars[num.Int64()]
+	}
+	return string(ret), nil
+}
+
+func salt_msg(msg string, salt_len int) (string, string) {
+	salt, _ := GenerateRandomString(salt_len)
+	salted_msg := msg + salt
+	return salted_msg, salt
+}
+
+func Salt_and_RSA_Encrypt(msg string, salt_len int, pubkey rsa.PublicKey) (string, string) {
+	salted_msg, salt := salt_msg(msg, salt_len)
+	encrypted_salted_msg := RSA_Encrypt(salted_msg, pubkey)
+	return encrypted_salted_msg, salt
+
+}
+
+func RSA_Decrypt_rmv_Salt(encrypted_salted_msg string, salt string, privKey rsa.PrivateKey) string {
+	decrypted_salted_msg := RSA_Decrypt(encrypted_salted_msg, privKey)
+	decrypted_msg, _ := strings.CutSuffix(decrypted_salted_msg, salt)
+	return decrypted_msg
+
+}
+
+func ExportRsaPrivateKeyAsPemStr(privkey *rsa.PrivateKey) string {
+	privkey_bytes := x509.MarshalPKCS1PrivateKey(privkey)
+	privkey_pem := pem.EncodeToMemory(
+		&pem.Block{
+			Type:  "RSA PRIVATE KEY",
+			Bytes: privkey_bytes,
+		},
+	)
+	return string(privkey_pem)
+}
+
+func ParseRsaPrivateKeyFromPemStr(privPEM string) (*rsa.PrivateKey, error) {
+	block, _ := pem.Decode([]byte(privPEM))
+	if block == nil {
+		return nil, errors.New("failed to parse PEM block containing the key")
+	}
+
+	priv, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	return priv, nil
+}
+
+func ExportRsaPublicKeyAsPemStr(pubkey *rsa.PublicKey) (string, error) {
+	pubkey_bytes, err := x509.MarshalPKIXPublicKey(pubkey)
+	if err != nil {
+		return "", err
+	}
+	pubkey_pem := pem.EncodeToMemory(
+		&pem.Block{
+			Type:  "RSA PUBLIC KEY",
+			Bytes: pubkey_bytes,
+		},
+	)
+	return string(pubkey_pem), nil
+}
+
+func ParseRsaPublicKeyFromPemStr(pubPEM string) (*rsa.PublicKey, error) {
+	block, _ := pem.Decode([]byte(pubPEM))
+	if block == nil {
+		return nil, errors.New("failed to parse PEM block containing the key")
+	}
+
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	switch pub := pub.(type) {
+	case *rsa.PublicKey:
+		return pub, nil
+	default:
+		break // fall through
+	}
+	return nil, errors.New("key type is not RSA")
 }

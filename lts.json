@@ -1,0 +1,14 @@
+[
+    {
+        "auction": {
+            "auctionID": int,
+            "auctioneerEmail": "string",
+            "thingsAndWinners": [
+                {
+                    "thing": "string",
+                    "winner": "string"
+                }
+            ]
+        }
+    }
+]
