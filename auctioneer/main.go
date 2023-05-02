@@ -56,8 +56,8 @@ func main() {
 
 	scanner := bufio.NewScanner(os.Stdin)
 
-	// new array to hold auctioneer name, auctioneer denomination
-	arr := make([]string, 0)
+	// new array to hold auctioneer name
+	var aucName string
 	for {
 		fmt.Print("Auctioneer Name: ")
 		// Scans a line from Stdin(Console)
@@ -65,19 +65,7 @@ func main() {
 		// Holds the string that scanned
 		text := scanner.Text()
 		if len(text) != 0 {
-			arr = append(arr, text)
-			break
-		}
-		fmt.Println("Try Again!")
-	}
-	for {
-		fmt.Print("Enter Denomination: ")
-		// Scans a line from Stdin(Console)
-		scanner.Scan()
-		// Holds the string that scanned
-		text := scanner.Text()
-		if len(text) != 0 {
-			arr = append(arr, text)
+			aucName = text
 			break
 		}
 		fmt.Println("Try Again!")
@@ -158,12 +146,12 @@ func main() {
 
 	formatarrT := strings.Join(arrT, "~")
 
-	// full encryption of the username, denom, thing list
+	// full encryption of the username, thing list
 
-	nameDenomList := arr[0] + ":" + arr[1] + ":" + formatarrT
-	encryptedMessage, salt := Salt_and_RSA_Encrypt(nameDenomList, 16, *serverPublic)
+	nameList := aucName + ":" + formatarrT
+	encryptedMessage, salt := Salt_and_RSA_Encrypt(nameList, 16, *serverPublic)
 
-	fmt.Fprintln(c, "AUCTIONEERNDL:"+encryptedMessage+":"+salt)
+	fmt.Fprintln(c, "AUCTIONEERNL:"+encryptedMessage+":"+salt)
 
 	go auctioneerSend(c)
 

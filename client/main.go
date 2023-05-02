@@ -51,7 +51,6 @@ func main() {
 
 	scanner := bufio.NewScanner(os.Stdin)
 	var uName string
-	var uDenom string
 	for {
 		fmt.Print("Client Name: ")
 		// Scans a line from Stdin(Console)
@@ -64,23 +63,11 @@ func main() {
 		}
 		fmt.Println("Try Again!")
 	}
-	for {
-		fmt.Print("Enter Denomination: ")
-		// Scans a line from Stdin(Console)
-		scanner.Scan()
-		// Holds the string that scanned
-		text := scanner.Text()
-		if len(text) != 0 {
-			uDenom = text
-			break
-		}
-		fmt.Println("Try Again!")
-	}
 
-	nameDenom := "Username:" + uName + ":" + uDenom
-	encryptedMessage, salt := Salt_and_RSA_Encrypt(nameDenom, 16, *serverPublic)
+	cName := "Username:" + uName
+	encryptedMessage, salt := Salt_and_RSA_Encrypt(cName, 16, *serverPublic)
 
-	fmt.Fprintln(c, "CLIENTND:"+encryptedMessage+":"+salt)
+	fmt.Fprintln(c, "CLIENTN:"+encryptedMessage+":"+salt)
 
 	// starts separate thread for this for loop
 

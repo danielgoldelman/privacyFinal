@@ -113,25 +113,22 @@ func main() {
 
 			temp := strings.TrimSpace(string(netData))
 
-			// checking if the auctioneer sent their name, denomination, and list
-			if strings.HasPrefix(temp, "AUCTIONEERNDL:") {
+			// checking if the auctioneer sent their name, and list
+			if strings.HasPrefix(temp, "AUCTIONEERNL:") {
 				splitRet := strings.Split(temp, ":")
-				uDL := splitRet[1]
+				uL := splitRet[1]
 				salt := splitRet[2]
 
-				auctioneerData := RSA_Decrypt_rmv_Salt(uDL, salt, *serverPrivate)
+				auctioneerData := RSA_Decrypt_rmv_Salt(uL, salt, *serverPrivate)
 
 				// splits auctioneer's info
 				splitAuctioneerData := strings.Split(auctioneerData, ":")
 				// gets auctioneer's username
-				userName := splitAuctioneerData[1]
+				userName := splitAuctioneerData[0]
 				auctioneerUname = userName
 
-				// gets auctioneer's denomination
-				_ = splitAuctioneerData[2]
-
 				// gets the thing, description, price list
-				thingDescPrice := strings.Split(splitAuctioneerData[2], "~")
+				thingDescPrice := strings.Split(splitAuctioneerData[1], "~")
 				itemlist = thingDescPrice
 
 				fmt.Println("Auctioneer Entered")
@@ -208,20 +205,13 @@ func main() {
 
 			temp2 := strings.TrimSpace(string(netData2))
 
-			// get username and denomination from client
+			// get username from client
 			splitRet2 := strings.Split(temp2, ":")
-			uD := splitRet2[1]
+			uName := splitRet2[1]
 			salt2 := splitRet2[2]
 
-			clientData := RSA_Decrypt_rmv_Salt(uD, salt2, *serverPrivate)
+			clientUname := RSA_Decrypt_rmv_Salt(uName, salt2, *serverPrivate)
 
-			clientUnameDenom := strings.Split(clientData, ":")
-
-			// get client username
-			clientUname := clientUnameDenom[1]
-
-			// get client denomination
-			_ = clientUnameDenom[2]
 			fmt.Println("New Client")
 
 			// set up client in new thread

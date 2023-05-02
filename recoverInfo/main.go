@@ -35,14 +35,14 @@ func main() {
 }
 
 func GetLen() int {
-	by, _ := os.ReadFile("../privates.json")
+	by, _ := os.ReadFile("privates.json")
 	allPrivates := []Private{}
 	_ = json.Unmarshal(by, &allPrivates)
 	return len(allPrivates)
 }
 
 func GetAuctionByID(id int) {
-	by, err := os.ReadFile("../recordOfAuctions.json")
+	by, err := os.ReadFile("recordOfAuctions.json")
 	if err != nil {
 		fmt.Println("Error reading file:", err)
 		return
@@ -55,7 +55,7 @@ func GetAuctionByID(id int) {
 		return
 	}
 
-	by2, err2 := os.ReadFile("../privates.json")
+	by2, err2 := os.ReadFile("privates.json")
 	if err2 != nil {
 		fmt.Println("Error reading file:", err)
 		return
