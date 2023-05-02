@@ -26,6 +26,12 @@ It will ask for a few things, then show "Welcome! List of items: {items from the
 You can then write things in the thirdterminal, which will be sent to the other terminals and printed. If you choose to open up other client terminals, they will behave the same as terminal 3.
 
 
+
+## IF RUNNING ON MULTIPLE (MAC) COMPUTERS:
+Download the right executable, and option click the file. Select open, and click yes to all popups. Open a terminal and cd to the file's folder. Then run `chmod u+x {file}_D_{os}` to allow the file to be run. Then you can run the file using `{file}_D_{os} {ip of server computer}`. Note: May need to check network settings to verify ip addr
+
+
+
 A few notes:
 
 - Denomination does not matter yet

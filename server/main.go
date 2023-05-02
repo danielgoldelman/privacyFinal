@@ -207,10 +207,12 @@ func main() {
 
 			// get username from client
 			splitRet2 := strings.Split(temp2, ":")
-			uName := splitRet2[1]
+			strAndUnameEnc := splitRet2[1]
 			salt2 := splitRet2[2]
 
-			clientUname := RSA_Decrypt_rmv_Salt(uName, salt2, *serverPrivate)
+			strAndUname := RSA_Decrypt_rmv_Salt(strAndUnameEnc, salt2, *serverPrivate)
+
+			clientUname := strings.Split(strAndUname, ":")[1]
 
 			fmt.Println("New Client")
 

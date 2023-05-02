@@ -35,6 +35,7 @@ func main() {
 	}
 
 	fmt.Fprintln(c, "Client#")
+	fmt.Println("The auction will begin shortly.")
 
 	message, _ := bufio.NewReader(c).ReadString('#')
 	messTrimmed := strings.TrimSpace(string(message))
@@ -43,7 +44,6 @@ func main() {
 		c.Close()
 		os.Exit(0)
 	}
-	fmt.Println("The auction will begin shortly.")
 
 	temp := messTrimmed[10 : len(messTrimmed)-1]
 	sSPub, _ := StringToRsaPublicKey(temp)
