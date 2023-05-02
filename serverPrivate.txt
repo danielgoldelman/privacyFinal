@@ -1,4 +1,3 @@
-danielgoldelman@Daniels-Computer ~/privacyFinal (figmaChanges)> go run server/main.go 1234
 -----BEGIN RSA PRIVATE KEY-----
 MIIEowIBAAKCAQEArzIYmGPsuFN+W0qK+702ZI8TP4dXHruvSydObaPsnEjNpf/0
 26C5M4Bo1NLnI+6P6bCLaSEArANJhVQn/o/gog7s4WX8lFOWYtWOwOsBMxiBUkgU

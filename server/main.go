@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -35,10 +36,10 @@ var serverPrivate *rsa.PrivateKey
 var auctioneerPublic *rsa.PublicKey
 
 // auctioneer net connections
-var sUConn net.Conn
+var auctioneerConn net.Conn
 
 // auctioneer username
-var sUUser string
+var auctioneerUname string
 
 // last person who bid (either higher or setup, no bid)
 var lastBidder string = ""
@@ -92,14 +93,14 @@ func main() {
 			// if the connection is the auctioneer
 
 			// assign auctioneer's connection
-			sUConn = c
+			auctioneerConn = c
 			strA := temp[14 : len(temp)-2]
 			aPub, _ := StringToRsaPublicKey(strA)
 			auctioneerPublic = aPub
 			sSPub, _ := RsaPublicKeyToString(serverPublic)
 
 			// send server public key to client
-			fmt.Fprint(sUConn, "SERVERPUB:"+sSPub+"#")
+			fmt.Fprint(auctioneerConn, "SERVERPUB:"+sSPub+"#")
 
 			// reads in first connection
 			netData, err := bufio.NewReader(c).ReadString('\n')
@@ -122,7 +123,7 @@ func main() {
 				splitAuctioneerData := strings.Split(auctioneerData, ":")
 				// gets auctioneer's username
 				userName := splitAuctioneerData[1]
-				sUUser = userName
+				auctioneerUname = userName
 
 				// gets auctioneer's denomination
 				_ = splitAuctioneerData[2]
@@ -156,7 +157,7 @@ func main() {
 	cost, _ = strconv.Atoi(splitThing[2])
 
 	// after auctioneer connects, run all following messages from the auctioneer on a new thread
-	go uA.handleAuctioneerConnection(sUConn, sUUser)
+	go uA.handleAuctioneerConnection(auctioneerConn, auctioneerUname)
 
 	// for each new user (Clients)
 	for {
@@ -226,8 +227,8 @@ func main() {
 
 // individual winner object
 type winnerInd struct {
-	item   string
-	winner string
+	Thing  string `json:"thing"`
+	Winner string `json:"winner"`
 }
 
 // general type to hold client list (list of connections), winner list (list of (item name * winner name)), and user list (map from net.conn to username)
@@ -254,16 +255,33 @@ func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 			uA.sendAllElse(c, discMess)
 
 			// get last winner
-			uA.wl = append(uA.wl, winnerInd{item: name, winner: lastBidder})
+			uA.wl = append(uA.wl, winnerInd{Thing: name, Winner: lastBidder})
 			winnerList := winnersToString(uA.wl)
 			encryptedMessage, salt := Salt_and_RSA_Encrypt(winnerList, 16, *auctioneerPublic)
 
-			// Send winner list to client, encrypted with their public key
+			// Send winner list to auctioneer, encrypted with their public key
 			fmt.Fprintln(c, "STOPRET:"+encryptedMessage+":"+salt)
+
+			// encrypt everything for long term storage
+			aucEmailEncrypted := RSA_Encrypt(auctioneerUname, *serverPublic)
+			var encryptedwl []winnerInd
+			for _, entry := range uA.wl {
+				thingEnc := RSA_Encrypt(entry.Thing, *serverPublic)
+				winnerEnc := RSA_Encrypt(entry.Winner, *serverPublic)
+				new := winnerInd{Thing: thingEnc, Winner: winnerEnc}
+				encryptedwl = append(encryptedwl, new)
+			}
+
+			// add to lts
+			AppendToRecords(Auction{AuctionID: 0, AuctioneerEmail: aucEmailEncrypted, ThingsAndWinners: encryptedwl})
+			serverPrivateString, _ := RsaPrivateKeyToString(serverPrivate)
+			// have to remove all instances of '\n', so replace with '#'
+			serverPrivateStringLnToHash := strings.ReplaceAll(serverPrivateString, "\n", "#")
+			AppendToPrivates(Private{AuctionID: 0, PrivateKey: serverPrivateStringLnToHash})
 			break
 		} else if temp == "NEXT" {
 			fmt.Println("Next thing")
-			uA.wl = append(uA.wl, winnerInd{item: name, winner: lastBidder})
+			uA.wl = append(uA.wl, winnerInd{Thing: name, Winner: lastBidder})
 			lastBidder = ""
 			ind += 1
 			if ind == len(itemlist) {
@@ -276,6 +294,22 @@ func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 
 				// Send winner list to client, encrypted with their public key
 				fmt.Fprintln(c, encryptedMessage+":"+salt)
+
+				aucEmailEncrypted := RSA_Encrypt(auctioneerUname, *serverPublic)
+				var encryptedwl []winnerInd
+				for _, entry := range uA.wl {
+					thingEnc := RSA_Encrypt(entry.Thing, *serverPublic)
+					winnerEnc := RSA_Encrypt(entry.Winner, *serverPublic)
+					new := winnerInd{Thing: thingEnc, Winner: winnerEnc}
+					encryptedwl = append(encryptedwl, new)
+				}
+
+				// add to lts
+				AppendToRecords(Auction{AuctionID: 0, AuctioneerEmail: aucEmailEncrypted, ThingsAndWinners: encryptedwl})
+				serverPrivateString, _ := RsaPrivateKeyToString(serverPrivate)
+				// have to remove all instances of '\n', so replace with '#'
+				serverPrivateStringLnToHash := strings.ReplaceAll(serverPrivateString, "\n", "#")
+				AppendToPrivates(Private{AuctionID: 0, PrivateKey: serverPrivateStringLnToHash})
 				break
 			}
 
@@ -363,7 +397,7 @@ func (uA *UserArr) sendAllElse(c net.Conn, message string) {
 
 // send a message to the auctioneer
 func sendToAuc(message string) {
-	fmt.Println(sUConn, message)
+	fmt.Println(auctioneerConn, message)
 }
 
 // deletes a connection from the UserArr
@@ -388,7 +422,7 @@ func (uA *UserArr) addCtoCL(c net.Conn, username string) {
 func winnersToString(wl []winnerInd) string {
 	var listAsString string
 	for _, thingWinner := range wl {
-		listAsString += `{"Item":"` + thingWinner.item + `","Winner":"` + thingWinner.winner + `"},`
+		listAsString += `{"Thing":"` + thingWinner.Thing + `","Winner":"` + thingWinner.Winner + `"},`
 	}
 	return "[" + listAsString[0:len(listAsString)-1] + "]"
 }
@@ -522,4 +556,81 @@ func StringToRsaPublicKey(pubStr string) (*rsa.PublicKey, error) {
 	}
 
 	return rsaPub, nil
+}
+
+// SAVING FUNCTIONS, TYPES
+
+type Auction struct {
+	AuctionID        int         `json:"auctionID"`
+	AuctioneerEmail  string      `json:"auctioneerEmail"`
+	ThingsAndWinners []winnerInd `json:"thingsAndWinners"`
+}
+
+func AppendToRecords(newAuction Auction) {
+	by, err := os.ReadFile("../recordOfAuctions.json")
+	if err != nil {
+		fmt.Println("Error reading file:", err)
+		return
+	}
+
+	c := []Auction{}
+	err = json.Unmarshal(by, &c)
+	if err != nil {
+		fmt.Println("Error unmarshaling JSON:", err)
+		return
+	}
+
+	newAuction.AuctionID = len(c)
+
+	c = append(c, newAuction)
+
+	// convert Person object to a JSON byte slice
+	jsonBytes, err := json.Marshal(c)
+	if err != nil {
+		fmt.Println("Error marshaling JSON:", err)
+		return
+	}
+
+	// write JSON data to file, overwriting if it already exists
+	err = os.WriteFile("../recordOfAuctions.json", jsonBytes, 0644)
+	if err != nil {
+		fmt.Println("Error writing JSON file:", err)
+	}
+}
+
+type Private struct {
+	AuctionID  int    `json:"auctionID"`
+	PrivateKey string `json:"privateKey"`
+}
+
+func AppendToPrivates(newPrivate Private) {
+	by, err := os.ReadFile("../privates.json")
+	if err != nil {
+		fmt.Println("Error reading file:", err)
+		return
+	}
+
+	c := []Private{}
+	err = json.Unmarshal(by, &c)
+	if err != nil {
+		fmt.Println("Error unmarshaling JSON:", err)
+		return
+	}
+
+	newPrivate.AuctionID = len(c)
+
+	c = append(c, newPrivate)
+
+	// convert Person object to a JSON byte slice
+	jsonBytes, err := json.Marshal(c)
+	if err != nil {
+		fmt.Println("Error marshaling JSON:", err)
+		return
+	}
+
+	// write JSON data to file, overwriting if it already exists
+	err = os.WriteFile("../privates.json", jsonBytes, 0644)
+	if err != nil {
+		fmt.Println("Error writing JSON file:", err)
+	}
 }
