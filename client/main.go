@@ -35,15 +35,16 @@ func main() {
 	}
 
 	fmt.Fprintln(c, "Client#")
-	fmt.Println("The auction will begin shortly.")
 
 	message, _ := bufio.NewReader(c).ReadString('#')
 	messTrimmed := strings.TrimSpace(string(message))
-	if messTrimmed == "Please wait for the auction to begin!" {
+	if messTrimmed == "Please wait for the auction to begin!" || messTrimmed == "An auction has already begun!" {
 		fmt.Println(messTrimmed)
 		c.Close()
 		os.Exit(0)
 	}
+	fmt.Println("The auction will begin shortly.")
+
 	temp := messTrimmed[10 : len(messTrimmed)-1]
 	sSPub, _ := StringToRsaPublicKey(temp)
 	serverPublic = sSPub
@@ -106,12 +107,14 @@ func main() {
 				fmt.Println(msg)
 			}
 			fmt.Print("\n\n")
-		} else if strings.HasPrefix(messTrimmed, "Next thing on auction") {
+		} else if strings.HasPrefix(messTrimmed, "Next thing on auction") || strings.HasPrefix(messTrimmed, "First thing on auction") {
 			fmt.Print("\n\n")
 			for _, msg := range strings.Split(messTrimmed, "$") {
 				fmt.Println(msg)
 			}
 			fmt.Print("\n\n")
+		} else if messTrimmed == "Auction has not yet begun." {
+			fmt.Println(messTrimmed)
 		} else {
 			fmt.Println(messTrimmed)
 		}

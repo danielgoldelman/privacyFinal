@@ -18,6 +18,8 @@ import (
 	"strings"
 )
 
+var aucStarted bool = false
+
 // current cost for thing on current auction
 var cost int
 
@@ -184,8 +186,15 @@ func main() {
 			continue
 		}
 
+		if aucStarted {
+			fmt.Fprintln(c, "An auction has already begun!")
+			c.Close()
+			continue
+		}
+
 		// now that we know this is a client, run this client on its own thread to not slow down any other new connections
 		go func() {
+
 			sSPub, _ := RsaPublicKeyToString(serverPublic)
 
 			// send server public key to client
@@ -223,6 +232,7 @@ func main() {
 			uA.addCtoCL(c, clientUname)
 		}()
 	}
+
 }
 
 // individual winner object
@@ -249,7 +259,7 @@ func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 
 		temp := strings.TrimSpace(string(netData))
 		fmt.Println(temp)
-		if temp == "STOP" {
+		if temp == "STOP" && aucStarted {
 			discMess := "__Auctioneer disconnected__"
 			fmt.Println(discMess)
 			uA.sendAllElse(c, discMess)
@@ -279,7 +289,7 @@ func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 			serverPrivateStringLnToHash := strings.ReplaceAll(serverPrivateString, "\n", "#")
 			AppendToPrivates(Private{AuctionID: 0, PrivateKey: serverPrivateStringLnToHash})
 			break
-		} else if temp == "NEXT" {
+		} else if temp == "NEXT" && aucStarted {
 			fmt.Println("Next thing")
 			uA.wl = append(uA.wl, winnerInd{Thing: name, Winner: lastBidder})
 			lastBidder = ""
@@ -322,7 +332,20 @@ func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 			mess := "Next thing on auction: " + splitThing[0] + "$Description: " + splitThing[1] + "$Starting price: " + splitThing[2]
 			fmt.Println(mess)
 			uA.sendAllElse(c, mess)
+		} else if temp == "START" && !aucStarted {
+			aucStarted = true
+			fmt.Println("First thing")
+			// setup new item for bid
+			splitThing := strings.Split(itemlist[ind], "#")
+			name = splitThing[0]
+			cost, _ = strconv.Atoi(splitThing[2])
+
+			// inform all clients of next thing on auction
+			mess := "First thing on auction: " + splitThing[0] + "$Description: " + splitThing[1] + "$Starting price: " + splitThing[2]
+			fmt.Println(mess)
+			uA.sendAllElse(c, mess)
 		} else {
+			fmt.Println(temp, aucStarted)
 			fmt.Fprintln(c, "Invalid input")
 		}
 		fmt.Println(temp)
@@ -334,9 +357,7 @@ func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 
 // Generates new read, handles disconnection, sends the message to all other connections
 func (uA *UserArr) handleClient(c net.Conn, userName string, itemList []string) {
-	splitThing := strings.Split(itemlist[ind], "#")
-	cost, _ = strconv.Atoi(splitThing[2])
-	fmt.Fprintln(c, "Welcome! List of items:", itemList, "$Current item: "+splitThing[0]+"$Description: "+splitThing[1]+"$Starting price: "+splitThing[2])
+	fmt.Fprintln(c, "Welcome! List of items:", itemList)
 
 	for {
 		// on new message from this client
@@ -344,6 +365,11 @@ func (uA *UserArr) handleClient(c net.Conn, userName string, itemList []string) 
 		if err != nil {
 			fmt.Println(err)
 			return
+		}
+
+		if !aucStarted {
+			fmt.Fprintln(c, "Auction has not yet begun.")
+			continue
 		}
 
 		temp := strings.TrimSpace(string(netData))
@@ -397,7 +423,7 @@ func (uA *UserArr) sendAllElse(c net.Conn, message string) {
 
 // send a message to the auctioneer
 func sendToAuc(message string) {
-	fmt.Println(auctioneerConn, message)
+	fmt.Fprintln(auctioneerConn, message)
 }
 
 // deletes a connection from the UserArr
@@ -567,7 +593,8 @@ type Auction struct {
 }
 
 func AppendToRecords(newAuction Auction) {
-	by, err := os.ReadFile("../recordOfAuctions.json")
+	filePath := "recordOfAuctions.json"
+	by, err := os.ReadFile(filePath)
 	if err != nil {
 		fmt.Println("Error reading file:", err)
 		return
@@ -592,7 +619,7 @@ func AppendToRecords(newAuction Auction) {
 	}
 
 	// write JSON data to file, overwriting if it already exists
-	err = os.WriteFile("../recordOfAuctions.json", jsonBytes, 0644)
+	err = os.WriteFile(filePath, jsonBytes, 0644)
 	if err != nil {
 		fmt.Println("Error writing JSON file:", err)
 	}
@@ -604,7 +631,8 @@ type Private struct {
 }
 
 func AppendToPrivates(newPrivate Private) {
-	by, err := os.ReadFile("../privates.json")
+	filePath := "privates.json"
+	by, err := os.ReadFile(filePath)
 	if err != nil {
 		fmt.Println("Error reading file:", err)
 		return
@@ -629,7 +657,7 @@ func AppendToPrivates(newPrivate Private) {
 	}
 
 	// write JSON data to file, overwriting if it already exists
-	err = os.WriteFile("../privates.json", jsonBytes, 0644)
+	err = os.WriteFile(filePath, jsonBytes, 0644)
 	if err != nil {
 		fmt.Println("Error writing JSON file:", err)
 	}

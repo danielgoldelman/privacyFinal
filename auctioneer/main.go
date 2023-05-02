@@ -217,14 +217,12 @@ func auctioneerSend(c net.Conn) {
 
 			// Client wants to exit the auction
 			message := strings.TrimSpace(string(text))
-			if message == "STOP" {
+			if message == "STOP" || message == "NEXT" || message == "START" {
 				mess = message
 				break
-			} else if message == "NEXT" {
-				mess = message
-				break
+			} else {
+				fmt.Println("Try Again!")
 			}
-			fmt.Println("Try Again!")
 		}
 
 		fmt.Fprintln(c, fmt.Sprint(mess))
