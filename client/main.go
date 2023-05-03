@@ -103,6 +103,9 @@ func main() {
 			fmt.Print("\n\n")
 		} else if messTrimmed == "Auction has not yet begun." {
 			fmt.Println(messTrimmed)
+		} else if messTrimmed == "Email Taken!" {
+			fmt.Println(messTrimmed)
+			os.Exit(0)
 		} else {
 			fmt.Println(messTrimmed)
 		}

@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -56,6 +57,8 @@ func FuzzIsValidEmail(f *testing.F) {
 	f.Add("test@.com")
 	f.Add("@example.com")
 	f.Add("test@example.")
+	f.Add("test:@ecam.com")
+	f.Add("lsihche@alhcjee#klauhce.son")
 
 	// Run the fuzzer
 	f.Fuzz(func(t *testing.T, email string) {
@@ -90,25 +93,19 @@ func TestGenerateRsaKeyPair(t *testing.T) {
 }
 
 func FuzzRSA_Encrypt(f *testing.F) {
-	// Seed the fuzzer with initial inputs
-	inputs := []string{
-		"hello",
-		"world",
-		"foo",
-		"bar",
-		"baz",
-	}
-	for _, input := range inputs {
-		f.Add([]byte(input))
-	}
+	// valids
+	f.Add("checking")
+	f.Add("a;lhcoeihfe")
+	f.Add("literally any string")
+	f.Add(" ")
 
 	// Use the fuzzer to generate inputs
-	f.Fuzz(func(t *testing.T, input []byte) {
+	f.Fuzz(func(t *testing.T, input string) {
 		// Generate a public/private key pair
 		key, _ := rsa.GenerateKey(rand.Reader, 2048)
 
 		// Encrypt the input string using the key
-		encrypted := RSA_Encrypt(string(input), key.PublicKey)
+		encrypted := RSA_Encrypt(input, key.PublicKey)
 
 		// Try to decrypt the ciphertext using the private key
 		decoded, err := base64.StdEncoding.DecodeString(encrypted)
@@ -173,31 +170,58 @@ func FuzzGenerateRandomString(f *testing.F) {
 }
 
 func TestRsaPrivateKeyToString(t *testing.T) {
-	// Generate a random RSA key pair for testing
-	privKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+	for i := 1; i < 10; i++ {
+		// Generate a random RSA key pair for testing
+		privKey, _ := rsa.GenerateKey(rand.Reader, 2048)
 
-	// Convert the private key to a string
-	pemStr, err := RsaPrivateKeyToString(privKey)
-	if err != nil {
-		t.Fatalf("RsaPrivateKeyToString failed: %v", err)
+		// Convert the private key to a string
+		pemStr, err := RsaPrivateKeyToString(privKey)
+		if err != nil {
+			t.Fatalf("RsaPrivateKeyToString failed: %v", err)
+		}
+
+		// Parse the PEM-encoded private key
+		block, _ := pem.Decode([]byte(pemStr))
+		if block == nil {
+			t.Fatalf("Failed to decode PEM block")
+		}
+
+		// Check that the decoded PEM block has the expected type
+		if block.Type != "RSA PRIVATE KEY" {
+			t.Fatalf("Unexpected PEM block type: %v", block.Type)
+		}
+
+		// Parse the DER-encoded private key
+		derBytes := block.Bytes
+		_, err = x509.ParsePKCS1PrivateKey(derBytes)
+		if err != nil {
+			t.Fatalf("Failed to parse DER-encoded private key: %v", err)
+		}
 	}
 
-	// Parse the PEM-encoded private key
-	block, _ := pem.Decode([]byte(pemStr))
-	if block == nil {
-		t.Fatalf("Failed to decode PEM block")
-	}
+	for i := 1; i < 3; i++ {
+		// Generate a random RSA key pair for testing
+		privKey, _ := rsa.GenerateKey(rand.Reader, 2048)
 
-	// Check that the decoded PEM block has the expected type
-	if block.Type != "RSA PRIVATE KEY" {
-		t.Fatalf("Unexpected PEM block type: %v", block.Type)
-	}
+		// Convert the private key to a string
+		pemStr, err := RsaPrivateKeyToString(privKey)
+		if err != nil {
+			t.Fatalf("RsaPrivateKeyToString failed: %v", err)
+		}
 
-	// Parse the DER-encoded private key
-	derBytes := block.Bytes
-	_, err = x509.ParsePKCS1PrivateKey(derBytes)
-	if err != nil {
-		t.Fatalf("Failed to parse DER-encoded private key: %v", err)
+		// Parse the PEM-encoded private key
+		b, _ := strconv.Atoi("aaa")
+		block, _ := pem.Decode(append([]byte(pemStr), uint8(b)))
+		if block == nil {
+			t.Fatalf("Decoded PEM block, error!")
+		}
+
+		// Parse the DER-encoded private key
+		derBytes := block.Bytes
+		_, err = x509.ParsePKCS1PrivateKey(derBytes)
+		if err != nil {
+			t.Fatalf("Failed to parse DER-encoded private key: %v", err)
+		}
 	}
 }
 

@@ -214,23 +214,29 @@ func main() {
 
 			clientUname := strings.Split(strAndUname, ":")[1]
 
+			if uA.userNameTaken(clientUname) || clientUname == auctioneerUname {
+				fmt.Fprintln(c, "Email Taken!")
+				c.Close()
+				return
+			}
+
 			fmt.Println("New Client")
 
 			// set up client in new thread
 			// client name is the number of their connection
-			go uA.handleClient(c, strconv.Itoa(len(uA.cl)), itemlist)
+			go uA.handleClient(c, itemlist)
 
 			// add client to client list
 			uA.addCtoCL(c, clientUname)
 		}()
 	}
-
 }
 
 // individual winner object
 type winnerInd struct {
 	Thing  string `json:"thing"`
 	Winner string `json:"winner"`
+	Price  string `json:"price"`
 }
 
 // general type to hold client list (list of connections), winner list (list of (item name * winner name)), and user list (map from net.conn to username)
@@ -257,7 +263,7 @@ func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 			uA.sendAllElse(c, discMess)
 
 			// get last winner
-			uA.wl = append(uA.wl, winnerInd{Thing: name, Winner: lastBidder})
+			uA.wl = append(uA.wl, winnerInd{Thing: name, Winner: lastBidder, Price: fmt.Sprint(cost)})
 			winnerList := winnersToString(uA.wl)
 			encryptedMessage, salt := Salt_and_RSA_Encrypt(winnerList, 16, *auctioneerPublic)
 
@@ -270,7 +276,8 @@ func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 			for _, entry := range uA.wl {
 				thingEnc := RSA_Encrypt(entry.Thing, *serverPublic)
 				winnerEnc := RSA_Encrypt(entry.Winner, *serverPublic)
-				new := winnerInd{Thing: thingEnc, Winner: winnerEnc}
+				costEnc := RSA_Encrypt(entry.Price, *serverPublic)
+				new := winnerInd{Thing: thingEnc, Winner: winnerEnc, Price: costEnc}
 				encryptedwl = append(encryptedwl, new)
 			}
 
@@ -283,7 +290,7 @@ func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 			break
 		} else if temp == "NEXT" && aucStarted {
 			fmt.Println("Next thing")
-			uA.wl = append(uA.wl, winnerInd{Thing: name, Winner: lastBidder})
+			uA.wl = append(uA.wl, winnerInd{Thing: name, Winner: lastBidder, Price: fmt.Sprint(cost)})
 			lastBidder = ""
 			ind += 1
 			if ind == len(itemlist) {
@@ -302,7 +309,8 @@ func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 				for _, entry := range uA.wl {
 					thingEnc := RSA_Encrypt(entry.Thing, *serverPublic)
 					winnerEnc := RSA_Encrypt(entry.Winner, *serverPublic)
-					new := winnerInd{Thing: thingEnc, Winner: winnerEnc}
+					costEnc := RSA_Encrypt(entry.Price, *serverPublic)
+					new := winnerInd{Thing: thingEnc, Winner: winnerEnc, Price: costEnc}
 					encryptedwl = append(encryptedwl, new)
 				}
 
@@ -348,7 +356,7 @@ func (uA *UserArr) handleAuctioneerConnection(c net.Conn, userName string) {
 }
 
 // Generates new read, handles disconnection, sends the message to all other connections
-func (uA *UserArr) handleClient(c net.Conn, userName string, itemList []string) {
+func (uA *UserArr) handleClient(c net.Conn, itemList []string) {
 	fmt.Fprintln(c, "Welcome! List of items:", itemList)
 
 	for {
@@ -370,7 +378,7 @@ func (uA *UserArr) handleClient(c net.Conn, userName string, itemList []string) 
 		// if the client disconnects
 		if temp == "STOP" {
 			fmt.Println("instop")
-			discMess := "__User " + userName + " disconnected__"
+			discMess := "__User disconnected__"
 			fmt.Println(discMess)
 
 			fmt.Fprintln(c, "bye")
@@ -388,7 +396,7 @@ func (uA *UserArr) handleClient(c net.Conn, userName string, itemList []string) 
 		if n > cost {
 			cost = n
 
-			message := "User " + userName + ": " + temp
+			message := "User: " + temp
 
 			fmt.Println(message)
 
@@ -435,6 +443,18 @@ func (uA *UserArr) deleteUser(c net.Conn) {
 func (uA *UserArr) addCtoCL(c net.Conn, username string) {
 	uA.cl = append(uA.cl, c)
 	uA.ul[c] = username
+}
+
+func (uA *UserArr) userNameTaken(username string) bool {
+	if len(uA.ul) == 0 {
+		return false
+	}
+	for _, uname := range uA.ul {
+		if username == uname {
+			return true
+		}
+	}
+	return false
 }
 
 func winnersToString(wl []winnerInd) string {
