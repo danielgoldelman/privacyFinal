@@ -78,7 +78,8 @@ func GetAuctionByID(id int) {
 	for _, entry := range chosenAuction.ThingsAndWinners {
 		th := RSA_Decrypt(entry.Thing, *privateKey)
 		wi := RSA_Decrypt(entry.Winner, *privateKey)
-		winnersDec = append(winnersDec, winnerInd{Thing: th, Winner: wi})
+		pr := RSA_Decrypt(entry.Price, *privateKey)
+		winnersDec = append(winnersDec, winnerInd{Thing: th, Winner: wi, Price: pr})
 	}
 	decodedAuc := Auction{AuctionID: id, AuctioneerEmail: aucEmail, ThingsAndWinners: winnersDec}
 	fmt.Println(decodedAuc)
@@ -87,6 +88,7 @@ func GetAuctionByID(id int) {
 type winnerInd struct {
 	Thing  string `json:"thing"`
 	Winner string `json:"winner"`
+	Price  string `json:"price"`
 }
 
 type Auction struct {
