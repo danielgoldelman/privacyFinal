@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"net"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -52,12 +53,12 @@ func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	var uName string
 	for {
-		fmt.Print("Client Name: ")
+		fmt.Print("Client Email (Note: Cannot include the characters ':' or '#'): ")
 		// Scans a line from Stdin(Console)
 		scanner.Scan()
 		// Holds the string that scanned
 		text := scanner.Text()
-		if len(text) != 0 {
+		if len(text) != 0 && IsValidEmail(text) {
 			uName = text
 			break
 		}
@@ -204,4 +205,22 @@ func StringToRsaPublicKey(pubStr string) (*rsa.PublicKey, error) {
 	}
 
 	return rsaPub, nil
+}
+
+func IsValidEmail(email string) bool {
+	// Regular expression for validating email addresses
+	regex := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
+
+	// Check if email address matches the regular expression
+	match, err := regexp.MatchString(regex, email)
+	if err != nil {
+		return false
+	}
+
+	// Check if email address contains invalid characters
+	if strings.Contains(email, ":") || strings.Contains(email, "#") {
+		return false
+	}
+
+	return match
 }
